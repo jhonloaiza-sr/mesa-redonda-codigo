@@ -40,3 +40,4 @@ def main()-> None:
 if __name__ == "__main__":
     #Ejecutamos la función principal.
     main()
+    
