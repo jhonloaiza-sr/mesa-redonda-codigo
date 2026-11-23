@@ -1,3 +1,6 @@
+#Importamos 'Any' del módulo 'typing' para indicar que un diccionario puede contener tipo de dato adentro.
+from typing import Any
+
 #Importamos la librería oficial de 'ollama' para enviar mensajes a nuestros modelos locales.
 import ollama
 
@@ -20,12 +23,23 @@ class AgenteBase:
             #Cerramos la lista inicial del historial.
         ]
 
-    #Definimos el método 'pensar', que reibe una orden en texto y devuelve la respuesta del LLM en texto.
-    def pensar(self, mensaje: str)-> str:
+    #Actualizamos 'pensar' para que acepte opcionalmente un 'formato_schema' (esquema JSON) o 'None' si es texto libre.
+    def pensar(self, mensaje: str, formato_schema: dict[str, Any]| None = None)-> str:
         #Agregamos la nueva petición al historial del agente con el rol 'user'.
         self.historial.append({"role": "user", "content": mensaje}) 
         #Imprimimos un aviso en consola para saber qué agente y modelo están trabajando en este momento.
         print(f"\n[{self.nombre} ({self.modelo}) está pensando...]")
+
+        #Si hay esquema JSON bajamos temperatura a 0.1 para máxima precisión; 'num_predict: 4096' evita que corte respuestas largas.
+        opciones_modelo: dict[str, Any] = (
+            # Opciones para respuestas estructuradas en JSON o código largo.
+            {"temperature": 0.1, "num_predict": 4096}
+            # Condición: si nos pasaron un esquema JSON estricto.
+            if formato_schema
+            # Si es conversación libre, permitimos un poco más de flexibilidad con temperatura 0.4.
+            else {"temperature": 0.4, "num_predict": 4096}
+        # Cerramos el diccionario de opciones.
+        )
 
         #Usamos un bloque 'try' para intentar conectarnos a Ollama de forma segura sin que el programa explote si falla.
         try:
@@ -35,11 +49,23 @@ class AgenteBase:
                 model = self.modelo,
                 #Pasamos la lista completa de mensajes acumulados en 'self.historial'.
                 messages = self.historial,
+                #Pasamos el esquema JSON al parámetro 'format' para forzar la estructura de salida (o None si es libre).
+                format = formato_schema,
+                #Pasamos las opciones de temperatura configuradas arriba.
+                options = opciones_modelo,
             #Cerramos la llamada a la función 'ollama.chat'.
             )
-            #Extraemos únicamente el texto de la respuesta generada por el modelo.
-            texto_respuesta: str = respuesta.message.content
-            #Guardamos la respuesta del modelo en el historial con el rol 'assistant' para que recuerde lo que dijo.
+            # Extraemos el texto de respuesta; usamos 'or ""' por seguridad en caso de que el campo llegue como None.
+            texto_respuesta: str = respuesta.message.content or ""
+
+            # Verificamos si el contenido llegó vacío (típico cuando un modelo "thinking" gasta todo en razonar).
+            if not texto_respuesta.strip():
+                # Intentamos leer si el modelo dejó su texto oculto en el atributo 'thinking' de Ollama.
+                pensamiento_oculto: str = getattr(respuesta.message, "thinking", "") or ""
+                # Imprimimos una alerta clara para diagnosticar fácilmente por qué vino vacío.
+                print(f"[Alerta]: '{self.modelo}' devolvió contenido vacío. Pensamiento interno: {len(pensamiento_oculto)} caracteres.")
+
+            # Guardamos la respuesta del modelo en el historial con el rol 'assistant' para que recuerde lo que dijo.
             self.historial.append({"role": "assistant", "content": texto_respuesta})
             #Devolvemos el texto generado para que quien llamó al agente pueda usarlo.
             return texto_respuesta
