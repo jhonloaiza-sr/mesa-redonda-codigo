@@ -72,19 +72,21 @@ class GestorProyecto:
 
     # Método público que guarda en disco duro un archivo Python escrito por el Programador.
     def guardar_archivo(self, ruta_relativa: str, contenido: str) -> Path:
+        # Si el modelo olvidó colocar la extensión '.py' al nombre, se la agregamos automáticamente.
+        if not ruta_relativa.endswith(".py"):
+            # Añadimos '.py' para que Python siempre reconozca el archivo como un módulo válido.
+            ruta_relativa = f"{ruta_relativa}.py"
         # Quitamos barras al inicio para asegurar que la ruta sea relativa al proyecto.
         ruta_destino: Path = self.ruta_proyecto / Path(ruta_relativa.lstrip("/\\"))
         # Creamos subcarpetas intermedias si hicieran falta.
         ruta_destino.parent.mkdir(parents=True, exist_ok=True)
-        # Limpiamos espacios al inicio y al final del código.
-        codigo_limpio: str = contenido.strip()
 
-        # Si el modelo incluyó bloques markdown ```python, los eliminamos automáticamente.
-        if codigo_limpio.startswith("```"):
-            # Dividimos el código en líneas individuales.
-            lineas: list[str] = codigo_limpio.splitlines()
-            # Quitamos la primera línea (```python) y la última si cierra con ```.
-            codigo_limpio = "\n".join(lineas[1:-1] if lineas[-1].strip() == "```" else lineas[1:])
+        # Buscamos si el código viene envuelto entre ```python ... ``` usando una expresión regular.
+        coincidencia = re.search(r"```(?:python)?\s*\n(.*?)```", contenido, re.DOTALL)
+        # Si encontró el bloque completo, tomamos su interior; si no, conservamos el texto tal cual.
+        codigo_crudo: str = coincidencia.group(1) if coincidencia else contenido
+        # Filtramos cualquier línea suelta que empiece por '```' para que nunca queden comillas markdown en el .py.
+        codigo_limpio: str = "\n".join(linea for linea in codigo_crudo.splitlines() if not linea.strip().startswith("```")).strip()
 
         # Guardamos el código en disco con codificación UTF-8.
         ruta_destino.write_text(codigo_limpio, encoding="utf-8")

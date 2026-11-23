@@ -69,15 +69,15 @@ class AgenteArquitecto(AgenteBase):
 class AgenteProgramador(AgenteBase):
     #El constructor recibe 'config' para usar el modelo especialista en código.
     def __init__(self, config: Configuracion)-> None:
-        #Definimos las reglas del Programador: POO limpia, tipado y comentarios en cada línea.
-        reglas : str = (
-            #Le ordenamos programar estrictamente con clases y métodos en Python moderno.
-            "Eres un Programador Senior de Python experto en Programación Orientada a Objetos (POO)."
-            #Le exigimos buenas practica: tipado, manejo de errores y código comentado línea por línea en español.
-            "Escribe código limpio, modular, con anotaciones de tipo y comentarios breves en español explicando cada línea."
-            #Le recordamos nunca envolver el código en comillas triples markdown dentro del JSON.
-            "Entrega únicamente código Python válido y completo dentro del campo solicitado."
-            #Cerramos las reglas.
+        # Definimos las reglas del Programador: POO limpia, importaciones completas y prohibición de '=' en lambdas.
+        reglas: str = (
+            # Le ordenamos programar estrictamente con clases y métodos en Python moderno.
+            "Eres un Programador Senior de Python experto en Programación Orientada a Objetos (POO). "
+            # Exigimos importar todo, no ejecutar código fuera de 'main.py' y jamás asignar '=' dentro de un 'lambda'.
+            "Importa siempre arriba todas las clases de otros módulos que uses (ej. 'from modelos import ...'), tipos como 'Optional' o 'datetime', NUNCA pongas '=' dentro de una función 'lambda' (usa métodos 'def' normales para botones 'on_click'), y NUNCA llames a 'ft.app'/'ft.run' fuera de 'main.py'. "
+            # Le pedimos responder únicamente con el bloque de código Python para extraerlo sin errores de JSON.
+            "Responde ÚNICAMENTE con el código Python completo dentro de un bloque ```python ... ``` sin explicaciones extra."
+        # Cerramos las reglas.
         )
         #Inicializamos la clase padre 'AgenteBase' con los datos del Progranador.
         super().__init__(
@@ -127,6 +127,19 @@ class AgenteProgramador(AgenteBase):
             #Cerramos la expresión del bloque de errores.
         )
 
+        # Verificamos si este archivo específico realmente pertenece a la interfaz gráfica o es 'main.py'.
+        es_archivo_ui: bool = any(palabra in f"{archivo.ruta_relativa} {archivo.proposito}".lower() for palabra in ("vista", "interfaz", "ventana", "ui", "flet", "main"))
+        # Si el proyecto usa Flet Y este módulo trata sobre la interfaz gráfica, damos instrucciones exactas de Flet 1.1+.
+        bloque_flet: str = (
+            # Ordenamos usar 'import flet as ft', definir vistas SIN herencia y usar 'ft.AlertDialog' en vez de 'ft.Modal'.
+            "\n\nREGLAS FLET 1.1+: Usa siempre 'import flet as ft' (NO uses 'from flet import ...'). Define TODAS las clases de vista SIN herencia (ej: 'class VentanaPrincipal:') recibiendo 'page: ft.Page'. Para alertas usa 'ft.AlertDialog' (NO existe ft.Modal). Usa 'ft.run(main)', 'ft.Button', 'ft.Icons' y 'ft.Colors'."
+            # Condición: solo si 'flet' está en dependencias Y este archivo sí es de interfaz o 'main.py'.
+            if any("flet" in dep.lower() for dep in plan.dependencias_uv) and es_archivo_ui
+            # Si es un archivo de lógica/datos (como modelos o controladores), no metemos reglas de Flet para no confundirlo.
+            else ""
+        # Cerramos el bloque de reglas Flet.
+        )
+
         #Armamos la orden completa para programar exactamente el archivo actual.
         prompt : str = (
             #Contexto general del proyecto.
@@ -138,37 +151,33 @@ class AgenteProgramador(AgenteBase):
             #Que debe hacer este archivo.
             f"Propósito: {archivo.proposito}\n"
             #Que clases POO debe contener obligatoriamente.
-            f"Clases requeridas: {','.join(archivo.clases_a_crear)}"
+            f"Clases requeridas: {','.join(archivo.clases_a_crear)}\n"
+            # Recordamos explícitamente importar las clases de módulos anteriores para evitar NameError.
+            "Regla: si usas clases de archivos anteriores, impórtalas arriba (ej. 'from modelos import Recordatorio')."
             #Añadimos el código previo (si existe).
             f"{bloque_contexto}"
             #Añadimos los errores a corregir (si existen)
             f"{bloque_errores}"
+            # Añadimos reglas de Flet 1.1+ si este proyecto usa Flet.
+            f"{bloque_flet}"
             #Cerramos el prompt.
         )
 
-        # Llamamos a '.pensar()' forzando el esquema JSON de 'ArchivoCodigo'.
-        respuesta_json: str = self.pensar(
-            # Enviamos el prompt.
-            mensaje=prompt,
-            # Forzamos que devuelva exactamente 'ruta_relativa' y 'codigo_python'.
-            formato_schema=ArchivoCodigo.model_json_schema(),
-        # Cerramos la llamada a '.pensar()'.
-        )
-        # Validamos el JSON recibido y devolvemos el objeto 'ArchivoCodigo'.
-        return ArchivoCodigo.model_validate_json(respuesta_json)
+        # Llamamos a '.pensar()' sin esquema JSON para que el modelo escriba Python fluido sin romper comillas.
+        respuesta_codigo: str = self.pensar(mensaje=prompt)
+        # Empaquetamos la respuesta en 'ArchivoCodigo' para respetar el tipo de retorno esperado por el sistema.
+        return ArchivoCodigo(ruta_relativa=archivo.ruta_relativa, codigo_python=respuesta_codigo)
 
 # Definimos 'AgenteTester' heredando también de 'AgenteBase'.
 class AgenteTester(AgenteBase):
     # El constructor recibe 'config' para asignar el modelo evaluador.
     def __init__(self, config: Configuracion) -> None:
-        # Definimos las reglas del Tester: ser exigente con sintaxis, importaciones y POO.
+        # Definimos las reglas del Tester: justo, práctico y certero con errores de importación y lambdas.
         reglas: str = (
-            # Le damos el papel de revisor técnico estricto.
-            "Eres un Ingeniero QA (Quality Assurance) experto en Python y POO. "
-            # Le explicamos que debe analizar el código y la salida real de ejecución para decidir si pasa o falla.
-            "Analiza si el código tiene errores de sintaxis, importaciones rotas, fallos lógicos o incumple la POO. "
-            # Le pedimos ser objetivo y dar instrucciones claras en español si algo falla.
-            "Sé estricto pero constructivo, respondiendo siempre en español bajo el esquema JSON pedido."
+            # Le damos el papel de revisor técnico práctico.
+            "Eres un Ingeniero QA práctico experto en Python y POO. "
+            # Le enseñamos a aprobar cuando Python pasa, y dar diagnóstico real en NameError y lambda con '='.
+            "Si la verificación real en Python fue exitosa, APRUEBA el archivo (aprobado=true) salvo fallo grave; no rechaces 'main.py' solo por usar una función. Si Python da NameError, indica qué 'import' agregar arriba. Si Python da SyntaxError en un 'lambda' con '=', indica reemplazar el 'lambda' por un método 'def' normal."
         # Cerramos las reglas.
         )
         # Llamamos al constructor de la clase padre 'AgenteBase'.

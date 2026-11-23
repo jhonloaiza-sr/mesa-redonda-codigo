@@ -30,30 +30,32 @@ class AgenteBase:
         #Imprimimos un aviso en consola para saber qué agente y modelo están trabajando en este momento.
         print(f"\n[{self.nombre} ({self.modelo}) está pensando...]")
 
-        #Si hay esquema JSON bajamos temperatura a 0.1 para máxima precisión; 'num_predict: 4096' evita que corte respuestas largas.
+        # Configuramos temperatura, 'repeat_penalty: 1.15' y 'num_ctx: 16384' para que quepan varios archivos en contexto sin error 400.
         opciones_modelo: dict[str, Any] = (
-            # Opciones para respuestas estructuradas en JSON o código largo.
-            {"temperature": 0.1, "num_predict": 4096}
+            # Opciones para respuestas estructuradas en JSON.
+            {"temperature": 0.1, "num_predict": 4096, "repeat_penalty": 1.15, "num_ctx": 16384}
             # Condición: si nos pasaron un esquema JSON estricto.
             if formato_schema
-            # Si es conversación libre, permitimos un poco más de flexibilidad con temperatura 0.4.
-            else {"temperature": 0.4, "num_predict": 4096}
+            # Para escritura de código o texto libre, mantenemos fluidez, penalización de repetición y 16K de memoria.
+            else {"temperature": 0.2, "num_predict": 4096, "repeat_penalty": 1.15, "num_ctx": 16384}
         # Cerramos el diccionario de opciones.
         )
 
         #Usamos un bloque 'try' para intentar conectarnos a Ollama de forma segura sin que el programa explote si falla.
         try:
-            #Llamamos a 'ollama.chat' enviando el modelo asignado y todo el historial de conversación del agente.
+            # Llamamos a 'ollama.chat' enviando modelo, historial, formato, opciones y desactivando 'think' si no hay JSON.
             respuesta = ollama.chat(
-                #Indicamos el nombre del modelo local que ejecutará la petición en tu tarjeta grafica
-                model = self.modelo,
-                #Pasamos la lista completa de mensajes acumulados en 'self.historial'.
-                messages = self.historial,
-                #Pasamos el esquema JSON al parámetro 'format' para forzar la estructura de salida (o None si es libre).
-                format = formato_schema,
-                #Pasamos las opciones de temperatura configuradas arriba.
-                options = opciones_modelo,
-            #Cerramos la llamada a la función 'ollama.chat'.
+                # Indicamos el nombre del modelo local que ejecutará la petición en tu RTX 4060.
+                model=self.modelo,
+                # Pasamos la lista completa de mensajes acumulados en 'self.historial'.
+                messages=self.historial,
+                # Pasamos el esquema JSON al parámetro 'format' para forzar la estructura de salida (o None si es libre).
+                format=formato_schema,
+                # Desactivamos el modo 'thinking' en escritura libre para poder usar 'qwen3.5:9b' rápido y sin respuestas vacías.
+                think=False if formato_schema is None else None,
+                # Pasamos las opciones de temperatura, límite de tokens y penalización de repetición.
+                options=opciones_modelo,
+            # Cerramos la llamada a la función 'ollama.chat'.
             )
             # Extraemos el texto de respuesta; usamos 'or ""' por seguridad en caso de que el campo llegue como None.
             texto_respuesta: str = respuesta.message.content or ""

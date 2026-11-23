@@ -1,99 +1,44 @@
-# Importamos nuestras tres clases de agentes especializados desde 'agentes.py'.
-from mesa_redonda.agentes import AgenteArquitecto, AgenteProgramador, AgenteTester
-
-# Importamos nuestra clase 'Configuracion' desde 'configuracion.py'.
+# Importamos nuestra clase 'Configuracion' desde el módulo 'configuracion.py'.
 from mesa_redonda.configuracion import Configuracion
 
-# Importamos 'EjecutorPruebas' desde su propio módulo dedicado.
-from mesa_redonda.ejecutor_pruebas import EjecutorPruebas
-
-# Importamos 'GestorProyecto' desde su propio módulo dedicado.
-from mesa_redonda.gestor_proyecto import GestorProyecto
+# Importamos nuestra clase directora 'MesaRedonda' desde el módulo 'orquestador.py'.
+from mesa_redonda.orquestador import MesaRedonda
 
 
-# Definimos la función principal que prueba toda la línea de producción con el primer archivo.
+# Definimos la función principal de entrada de toda la aplicación.
 def main() -> None:
     # Creamos la configuración central del sistema.
     config = Configuracion()
-    # Aseguramos que exista la carpeta padre 'proyectos_generados'.
-    config.preparar_entorno()
+    # Creamos el objeto director 'MesaRedonda' pasándole la configuración.
+    mesa = MesaRedonda(config)
 
-    # Instanciamos a los 3 miembros de nuestra Mesa Redonda de Código.
-    arquitecto = AgenteArquitecto(config)
-    # Instanciamos al Programador.
-    programador = AgenteProgramador(config)
-    # Instanciamos al Tester.
-    tester = AgenteTester(config)
-
-    # Definimos la petición de prueba: tu aplicación de recordatorio de pastas.
-    peticion: str = (
-        # Describimos la funcionalidad principal en Windows 11 con Flet.
+    # Definimos nuestra petición por defecto (la app de pastas con pistas exactas de Flet 1.1+ moderno).
+    peticion_por_defecto: str = (
+        # Descripción funcional de la app en Windows 11.
         "Crea una app de escritorio en Flet para Windows 11 que funcione como recordatorio de tomar pastas. "
-        # Añadimos los requisitos de notificación flotante, intensidad según importancia, check obligatorio e historial.
-        "Debe permitir programar horarios con nivel de importancia, mostrar una notificación flotante que no se cierre hasta marcar un check, y guardar el historial de tomas en SQLite."
-    # Cerramos el texto de la petición.
+        # Requisitos de horarios, ventana flotante persistente, importancia, check obligatorio e historial SQLite.
+        "Permite agregar horarios con nivel de importancia (Baja, Media, Crítica), abre una ventana flotante siempre visible (page.window.always_on_top = True) que no se cierre hasta marcar un check de confirmación, y guarda el historial de tomas en SQLite. "
+        # Exigimos que el último archivo planeado se llame exactamente 'main.py'.
+        "Obligatorio: el último archivo del plan debe llamarse exactamente 'main.py'. "
+        # Pistas exactas de sintaxis para Flet 1.1+ para evitar nombres obsoletos de Flet antiguo.
+        "Regla obligatoria para Flet 1.1+: usa siempre 'import flet as ft', 'ft.run(main)' (NO ft.app), 'ft.Button' (NO ElevatedButton), 'ft.Icons' (NO icons) y 'ft.Colors' (NO colors)."
+    # Cerramos el texto de la petición por defecto.
     )
 
-    # Paso 1: El Arquitecto diseña la arquitectura modular del proyecto.
-    plan = arquitecto.disenar_arquitectura(peticion)
-    # Imprimimos el nombre y las dependencias originales que propuso el Arquitecto.
-    print(f"\n=== PLAN: {plan.nombre_proyecto} | Dependencias sugeridas: {plan.dependencias_uv} ===")
+    # Mostramos el título del sistema en la terminal.
+    print("=== MESA REDONDA DE CÓDIGO (Multi-Agente POO Local) ===")
+    # Pedimos al usuario que escriba qué programa quiere crear, o presione Enter para usar la App de Pastas.
+    entrada_usuario: str = input("\nDescribe qué app quieres crear (o presiona Enter para construir la App de Pastas):\n> ").strip()
+    # Elegimos lo que escribió el usuario, o la petición por defecto si solo presionó Enter.
+    peticion_final: str = entrada_usuario if entrada_usuario else peticion_por_defecto
 
-    # Paso 2: Creamos el 'GestorProyecto' que limpia el nombre de la carpeta y prepara el entorno con uv.
-    gestor = GestorProyecto(carpeta_base=config.carpeta_salida, nombre_proyecto=plan.nombre_proyecto)
-    # Inicializamos el nuevo proyecto con uv e instalamos únicamente las dependencias externas reales (filtrando 'sqlite3').
-    log_entorno = gestor.inicializar_entorno(plan.dependencias_uv)
-    # Imprimimos en qué carpeta física quedó el proyecto y qué instaló uv.
-    print(f"\n=== ENTORNO CREADO EN: {gestor.ruta_proyecto} ===")
-    # Mostramos el resumen de lo que hicieron 'uv init' y 'uv add'.
-    print(log_entorno)
-
-    # Paso 3: Verificamos que el plan tenga archivos por construir.
-    if len(plan.archivos) > 0:
-        # Tomamos el primer módulo del plan (usualmente el de modelos de datos).
-        primer_archivo = plan.archivos[0]
-        # El Programador genera el código POO para ese primer archivo.
-        codigo_generado = programador.escribir_archivo(plan=plan, archivo=primer_archivo)
-        # Guardamos ese código en un archivo real dentro de la carpeta del proyecto nuevo.
-        ruta_guardada = gestor.guardar_archivo(
-            # Indicamos la ruta relativa elegida por el Arquitecto.
-            ruta_relativa=codigo_generado.ruta_relativa,
-            # Pasamos el código Python generado.
-            contenido=codigo_generado.codigo_python,
-        # Cerramos la llamada a 'guardar_archivo'.
-        )
-        # Avisamos por consola dónde se guardó el archivo real.
-        print(f"\n[Archivo guardado en disco]: {ruta_guardada}")
-
-        # Paso 4: Creamos el 'EjecutorPruebas' apuntando a la carpeta del nuevo proyecto.
-        ejecutor = EjecutorPruebas(ruta_proyecto=gestor.ruta_proyecto)
-        # Ejecutamos la verificación real de sintaxis e importación en Python sobre el archivo guardado.
-        paso_tecnico, salida_consola = ejecutor.verificar_archivo(codigo_generado.ruta_relativa)
-        # Imprimimos lo que respondió Python al probar ese archivo real.
-        print(f"\n[Resultado Python real (Éxito={paso_tecnico})]: {salida_consola}")
-
-        # Paso 5: El 'AgenteTester' analiza el código junto con la salida real de Python y da su veredicto.
-        veredicto = tester.revisar_codigo(
-            # Le decimos qué archivo está revisando.
-            ruta_archivo=codigo_generado.ruta_relativa,
-            # Le pasamos el código exacto que se guardó.
-            codigo=codigo_generado.codigo_python,
-            # Le entregamos la evidencia real de la terminal.
-            salida_consola=salida_consola,
-        # Cerramos la llamada a 'revisar_codigo'.
-        )
-
-        # Mostramos en pantalla el veredicto estructurado del AgenteTester.
-        print("\n=== VEREDICTO DEL TESTER ===")
-        # Imprimimos si aprobó o rechazó el archivo.
-        print(f"Aprobado: {veredicto.aprobado}")
-        # Imprimimos el resumen de fallos o confirmación.
-        print(f"Resumen: {veredicto.resumen_fallos}")
-        # Imprimimos las instrucciones de corrección si las hubo.
-        print(f"Correcciones: {veredicto.instrucciones_correccion}")
+    # Lanzamos la construcción completa del proyecto multi-archivo y guardamos la ruta resultante.
+    ruta_creada = mesa.construir_proyecto(peticion_final)
+    # Imprimimos las instrucciones exactas para probar el proyecto recién fabricado por tus agentes.
+    print(f"\nPara probar tu nueva app, ejecuta en terminal:\ncd {ruta_creada}\nuv run main.py")
 
 
-# Bloque estándar que arranca la función principal al ejecutar este archivo.
+# Este bloque estándar garantiza que 'main()' solo arranque si ejecutamos directamente 'main.py'.
 if __name__ == "__main__":
-    # Llamamos a 'main()'.
+    # Ejecutamos la función principal.
     main()

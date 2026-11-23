@@ -8,11 +8,11 @@ class Configuracion:
         #Guardamos el nombre del modelo que usará el Agente Arquitecto (bueno para planear y estructurar ideas).
         self.modelo_arquitecto: str = "qwen2.5-coder:7b"
         #Guardamos el nombre del modelo que usará el Agente Programador (especialista en escribir código).
-        self.modelo_programador: str = "qwen2.5-coder:7b"
+        self.modelo_programador: str = "qwen3.5:9b"
         #Guardamos el nombre del modelo que usará el Agente Tester (encargado de revisar y validar resultados).
         self.modelo_tester: str = "qwen2.5-coder:7b"
         #Definimos el número máximo de veces que el Programador puede intentar corregir un error antes de detenerse.
-        self.max_intentos_correcion: int = 3
+        self.max_intentos_correccion: int = 3
         #Definimos la carpeta donde los agentes guardarán los proyectos que construyan (por ejemplo, la app de pastas).
         self.carpeta_salida: Path = Path("proyectos_generados")
 

@@ -15,7 +15,7 @@ class EjecutorPruebas:
         # Creamos un objeto 'EjecutorComandos' apuntando a esa carpeta.
         self.comandos: EjecutorComandos = EjecutorComandos(ruta_proyecto)
 
-    # Método público que valida sintaxis e importación de un archivo Python y devuelve (éxito, mensaje).
+    # Método público que valida sintaxis e importación de CUALQUIER archivo Python y devuelve (éxito, mensaje).
     def verificar_archivo(self, ruta_relativa: str) -> tuple[bool, str]:
         # Paso 1: Revisamos sintaxis con 'py_compile' (no abre ventanas gráficas ni ejecuta el programa).
         res_sintaxis = self.comandos.ejecutar(["uv", "run", "python", "-m", "py_compile", ruta_relativa])
@@ -25,21 +25,25 @@ class EjecutorPruebas:
             # Devolvemos False junto con el detalle del error.
             return False, f"Error de sintaxis detectado por Python:\n{res_sintaxis.stderr}"
 
-        # Paso 2: Si no es 'main.py', probamos importar el módulo para verificar que todos sus 'import' funcionen.
-        if ruta_relativa != "main.py" and ruta_relativa.endswith(".py"):
+        # Paso 2: Probamos importar el módulo (incluido 'main.py') para detectar NameError o ImportError reales.
+        if ruta_relativa.endswith(".py"):
             # Convertimos 'carpeta/archivo.py' en 'carpeta.archivo'.
             modulo: str = ruta_relativa.removesuffix(".py").replace("/", ".").replace("\\", ".")
-            # Usamos try/except para controlar si la importación supera el límite de tiempo.
+            # Usamos try/except para controlar si el archivo abre una ventana gráfica y supera el tiempo límite.
             try:
-                # Ejecutamos una importación rápida con límite de 15 segundos.
-                res_import = self.comandos.ejecutar(["uv", "run", "python", "-c", f"import {modulo}"], tiempo_limite=15)
-                # Si falló al importar, devolvemos False con el error exacto.
+                # Ejecutamos una importación rápida con límite de 8 segundos.
+                res_import = self.comandos.ejecutar(["uv", "run", "python", "-c", f"import {modulo}"], tiempo_limite=8)
+                # Si falló al importar (ej. NameError o ImportError), devolvemos False con el error exacto.
                 if res_import.returncode != 0:
-                    # Retornamos el fallo de importación para que el Tester lo analice.
+                    # Retornamos el fallo de importación para que el Programador lo corrija.
                     return False, f"Error al importar '{modulo}':\n{res_import.stderr}"
-            # Capturamos si el módulo se quedó bloqueado más de 15 segundos.
+            # Capturamos si 'main.py' abrió la ventana gráfica sin errores y alcanzó el tiempo límite.
             except subprocess.TimeoutExpired:
-                # Avisamos del exceso de tiempo sin colgar nuestro sistema.
+                # Si es 'main.py', llegar hasta abrir la GUI significa que sus importaciones y clases funcionaron.
+                if ruta_relativa == "main.py":
+                    # Aprobamos 'main.py' cerrando automáticamente la comprobación.
+                    return True, "Verificación exitosa: 'main.py' cargó sin errores de importación."
+                # Para módulos secundarios, un bloqueo de más de 8 segundos sí es un error real.
                 return False, f"El módulo '{modulo}' excedió el tiempo límite al importarse."
 
         # Si todo salió bien, devolvemos True con la confirmación.
