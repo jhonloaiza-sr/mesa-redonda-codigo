@@ -1,0 +1,2 @@
+# Este archivo le indica a Python que la carpeta 'mesa_redonda' es un paquete modular importable.
+#Aunque no tenga código ejecutable adentro, se presencia permite hacer: from mesa_redonda.configuracion import Configuracion
